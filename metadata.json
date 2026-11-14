@@ -1,0 +1,8 @@
+{
+  "name": "Valuation Pro",
+  "description": "Sistema de Avaliação Imobiliária, Perícia e Vistoria Técnica (COFECI 1.065 / ABNT NBR 14.653-2)",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
