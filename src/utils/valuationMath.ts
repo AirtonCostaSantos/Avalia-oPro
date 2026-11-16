@@ -1,10 +1,13 @@
 import type {
+  ClientRecord,
   ConstructionStandard,
   EvaluationPurpose,
   InspectionPhoto,
   InspectionRoom,
   MarketSample,
   PropertyDetails,
+  PropertyType,
+  RegisteredProperty,
   RossState,
   UserProfile,
 } from '../types/valuation';
@@ -46,6 +49,12 @@ export const PURPOSE_LABELS: Record<EvaluationPurpose, string> = {
   JUDICIAL: 'Perícia Judicial',
 };
 
+export const PROPERTY_TYPE_LABELS: Record<PropertyType, string> = {
+  APARTAMENTO: 'Apartamento Padrão',
+  CASA_CONDOMINIO: 'Casa em Condomínio',
+  SALA_COMERCIAL: 'Conjunto Comercial',
+};
+
 export function calcRossHeideckeK(age: number, usefulLife: number, state: RossState): number {
   const safeLife = usefulLife > 0 ? usefulLife : 60;
   const x = Math.min(Math.max((age || 0) / safeLife, 0), 1.0);
@@ -83,6 +92,7 @@ export function buildPhotoWatermark(
 }
 
 export const INITIAL_PROFILE: UserProfile = {
+  id: 'broker_1',
   name: 'Carlos Alberto Mendonça',
   creci: '18.490-F',
   creciState: 'SP',
@@ -227,5 +237,110 @@ export const INITIAL_SAMPLES: MarketSample[] = [
     standard: 'LUXO',
     distanceMeters: 490,
     sourceType: 'OFERTA',
+  },
+];
+
+export const INITIAL_CLIENTS: ClientRecord[] = [
+  {
+    id: 'cli_1',
+    name: 'Dr. Paulo Henrique Siqueira',
+    document: '142.890.318-72',
+    personType: 'PF',
+    email: 'paulo.siqueira@adv.br',
+    phone: '(11) 98412-7730',
+    cityState: 'São Paulo - SP',
+    notes: 'Proprietário investidor — carteira Itaim Bibi e Moema.',
+    createdAt: '10/11/2026',
+  },
+  {
+    id: 'cli_2',
+    name: 'Construtora Horizonte Sul Ltda.',
+    document: '28.419.002/0001-54',
+    personType: 'PJ',
+    email: 'patrimonio@horizontesul.com.br',
+    phone: '(11) 3042-8810',
+    cityState: 'São Paulo - SP',
+    notes: 'Solicita avaliações periódicas para garantias bancárias.',
+    createdAt: '12/11/2026',
+  },
+  {
+    id: 'cli_3',
+    name: 'Mariana Vasconcelos Duarte',
+    document: '318.744.918-05',
+    personType: 'PF',
+    email: 'mariana.duarte@uol.com.br',
+    phone: '(11) 97210-3349',
+    cityState: 'São Paulo - SP',
+    notes: 'Locação residencial de alto padrão nos Jardins.',
+    createdAt: '14/11/2026',
+  },
+];
+
+export const INITIAL_REGISTERED_PROPERTIES: RegisteredProperty[] = [
+  {
+    id: 'prop_1',
+    clientId: 'cli_1',
+    title: 'Apto 142 · Ed. Pedroso Alvarenga',
+    purpose: 'VENDA',
+    zip: '04538-133',
+    street: 'Rua Pedroso Alvarenga, 1140 - Apto 142',
+    neighborhood: 'Itaim Bibi',
+    cityState: 'São Paulo - SP',
+    matricula: '148.902',
+    cartorio: '4º Oficial de Registro de Imóveis de SP',
+    type: 'APARTAMENTO',
+    standard: 'ALTO',
+    privateArea: 165,
+    totalArea: 240,
+    ageYears: 12,
+    usefulLifeYears: 60,
+    rossHeidecke: 'ENTRE_NOVO_REGULAR',
+    summaryDescription:
+      'Unidade residencial autônoma com living integrado para 3 ambientes, varanda gourmet nivelada, acabamentos em porcelanato nobre e madeira cumaru, esquadrias de alta vedação acústica e pleno funcionamento predial.',
+    createdAt: '10/11/2026',
+  },
+  {
+    id: 'prop_2',
+    clientId: 'cli_2',
+    title: 'Conjunto Corporativo 91 · Faria Lima Prime',
+    purpose: 'GARANTIA',
+    zip: '01451-001',
+    street: 'Av. Brigadeiro Faria Lima, 3144 - Conj. 91',
+    neighborhood: 'Jardim Paulistano',
+    cityState: 'São Paulo - SP',
+    matricula: '92.410',
+    cartorio: '13º Oficial de Registro de Imóveis de SP',
+    type: 'SALA_COMERCIAL',
+    standard: 'LUXO',
+    privateArea: 220,
+    totalArea: 310,
+    ageYears: 6,
+    usefulLifeYears: 60,
+    rossHeidecke: 'ENTRE_NOVO_REGULAR',
+    summaryDescription:
+      'Laje corporativa Triple A com piso elevado, ar-condicionado VRF central, 6 vagas de garagem e certificação LEED Gold.',
+    createdAt: '12/11/2026',
+  },
+  {
+    id: 'prop_3',
+    clientId: 'cli_3',
+    title: 'Casa 08 · Condomínio Jardim Europa',
+    purpose: 'LOCACAO',
+    zip: '01449-000',
+    street: 'Rua Rússia, 412 - Casa 08',
+    neighborhood: 'Jardim Europa',
+    cityState: 'São Paulo - SP',
+    matricula: '67.118',
+    cartorio: '4º Oficial de Registro de Imóveis de SP',
+    type: 'CASA_CONDOMINIO',
+    standard: 'LUXO',
+    privateArea: 340,
+    totalArea: 420,
+    ageYears: 15,
+    usefulLifeYears: 65,
+    rossHeidecke: 'REGULAR',
+    summaryDescription:
+      'Residência em condomínio fechado com 4 suítes, jardim privativo com piscina aquecida e sistema de segurança perimetral.',
+    createdAt: '14/11/2026',
   },
 ];

@@ -1,4 +1,4 @@
-import { ArrowUpRight, Building, CheckCircle2, Clock, Percent, Plus, Sliders, TrendingUp } from 'lucide-react';
+import { ArrowUpRight, Building, CheckCircle2, Clock, Percent, Plus, Sliders, TrendingUp, Users } from 'lucide-react';
 import type { AppTab, CalculationStats, PropertyDetails } from '../types/valuation';
 import { formatBRL } from '../utils/valuationMath';
 
@@ -6,6 +6,8 @@ interface DashboardViewProps {
   onNavigate: (tab: AppTab) => void;
   property: PropertyDetails;
   stats: CalculationStats | null;
+  clientCount: number;
+  propertyCount: number;
 }
 
 const OBSERVATORY_REGIONS = [
@@ -22,7 +24,13 @@ const TYPOLOGY_DISTRIBUTION = [
   { label: 'Terrenos & Loteamentos', count: 10, percent: 8, barClass: 'bg-purple-500' },
 ];
 
-export function DashboardView({ onNavigate, property, stats }: DashboardViewProps) {
+export function DashboardView({
+  onNavigate,
+  property,
+  stats,
+  clientCount,
+  propertyCount,
+}: DashboardViewProps) {
   const activeMarketVal = stats ? formatBRL(stats.calculatedMarketValue) : 'R$ 2.350.000';
   const activeUnitM2 = stats ? formatBRL(stats.sanitizedMeanUnitPrice) : 'R$ 14.242';
   const activeGrade = stats ? stats.evaluationGrade : 'GRAU III';
@@ -34,19 +42,27 @@ export function DashboardView({ onNavigate, property, stats }: DashboardViewProp
           <h1 className="text-2xl font-bold text-white tracking-tight text-balance">
             Painel Executivo de Avaliações & Laudos
           </h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Gestão consolidada de perícias, pareceres mercadológicos e observatório imobiliário
+          <p className="text-xs text-slate-400 mt-1 tabular-nums">
+            Gestão consolidada de perícias · {clientCount} clientes e {propertyCount} imóveis na base
           </p>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex flex-wrap items-center gap-3 shrink-0">
           <button
             type="button"
             onClick={() => onNavigate('profile')}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-200 hover:bg-slate-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
           >
             <Sliders className="w-3.5 h-3.5 text-amber-400" />
-            Configurar Identidade
+            Cadastro do Corretor
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigate('registry')}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-200 hover:bg-slate-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            <Users className="w-3.5 h-3.5 text-amber-400" />
+            Clientes & Imóveis
           </button>
           <button
             type="button"

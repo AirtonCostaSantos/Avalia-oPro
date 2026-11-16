@@ -4,20 +4,25 @@ import { DashboardView } from './components/DashboardView';
 import { InspectionDocumentView } from './components/InspectionDocumentView';
 import { ProfileView } from './components/ProfileView';
 import { PtamDocumentView } from './components/PtamDocumentView';
+import { RegistryView } from './components/RegistryView';
 import { WizardView } from './components/WizardView';
 import type {
   AppTab,
   CalculationResponse,
+  ClientRecord,
   InspectionPhoto,
   InspectionRoom,
   MarketSample,
   PropertyDetails,
+  RegisteredProperty,
   UserProfile,
 } from './types/valuation';
 import {
+  INITIAL_CLIENTS,
   INITIAL_PHOTOS,
   INITIAL_PROFILE,
   INITIAL_PROPERTY,
+  INITIAL_REGISTERED_PROPERTIES,
   INITIAL_ROOMS,
   INITIAL_SAMPLES,
 } from './utils/valuationMath';
@@ -31,78 +36,54 @@ interface ToastState {
 
 const NAV_TABS: { id: AppTab; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
-  { id: 'profile', label: 'Identidade' },
+  { id: 'profile', label: 'Cadastro Corretor' },
+  { id: 'registry', label: 'Clientes & Imóveis' },
   { id: 'wizard', label: 'Vistoria & PTAM' },
   { id: 'ptam-doc', label: 'Parecer PTAM' },
   { id: 'inspection-doc', label: 'Laudo Vistoria' },
 ];
 
+function loadSavedField<T>(key: string, fallback: T): T {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed && parsed[key] !== undefined) {
+        return parsed[key] as T;
+      }
+    }
+  } catch {
+    // Ignore invalid local storage
+  }
+  return fallback;
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('dashboard');
-  const [profile, setProfile] = useState<UserProfile>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.profile) return parsed.profile;
-      }
-    } catch {
-      // Ignore invalid local storage
-    }
-    return INITIAL_PROFILE;
-  });
-
-  const [property, setProperty] = useState<PropertyDetails>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.property) return parsed.property;
-      }
-    } catch {
-      // Ignore invalid local storage
-    }
-    return INITIAL_PROPERTY;
-  });
-
-  const [rooms, setRooms] = useState<InspectionRoom[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed.rooms)) return parsed.rooms;
-      }
-    } catch {
-      // Ignore invalid local storage
-    }
-    return INITIAL_ROOMS;
-  });
-
-  const [photos, setPhotos] = useState<InspectionPhoto[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed.photos)) return parsed.photos;
-      }
-    } catch {
-      // Ignore invalid local storage
-    }
-    return INITIAL_PHOTOS;
-  });
-
-  const [samples, setSamples] = useState<MarketSample[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed.samples)) return parsed.samples;
-      }
-    } catch {
-      // Ignore invalid local storage
-    }
-    return INITIAL_SAMPLES;
-  });
+  const [profile, setProfile] = useState<UserProfile>(() =>
+    loadSavedField('profile', INITIAL_PROFILE)
+  );
+  const [brokers, setBrokers] = useState<UserProfile[]>(() =>
+    loadSavedField('brokers', [INITIAL_PROFILE])
+  );
+  const [clients, setClients] = useState<ClientRecord[]>(() =>
+    loadSavedField('clients', INITIAL_CLIENTS)
+  );
+  const [registeredProperties, setRegisteredProperties] = useState<RegisteredProperty[]>(() =>
+    loadSavedField('registeredProperties', INITIAL_REGISTERED_PROPERTIES)
+  );
+  const [property, setProperty] = useState<PropertyDetails>(() =>
+    loadSavedField('property', INITIAL_PROPERTY)
+  );
+  const [rooms, setRooms] = useState<InspectionRoom[]>(() =>
+    loadSavedField('rooms', INITIAL_ROOMS)
+  );
+  const [photos, setPhotos] = useState<InspectionPhoto[]>(() =>
+    loadSavedField('photos', INITIAL_PHOTOS)
+  );
+  const [samples, setSamples] = useState<MarketSample[]>(() =>
+    loadSavedField('samples', INITIAL_SAMPLES)
+  );
 
   const [calculation, setCalculation] = useState<CalculationResponse | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
@@ -121,19 +102,26 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [toast]);
 
-  // Persist workspace state to localStorage
   useEffect(() => {
     try {
       localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ profile, property, rooms, photos, samples })
+        JSON.stringify({
+          profile,
+          brokers,
+          clients,
+          registeredProperties,
+          property,
+          rooms,
+          photos,
+          samples,
+        })
       );
     } catch {
       // Storage quota exceeded on large uploaded images; continue safely in memory
     }
-  }, [profile, property, rooms, photos, samples]);
+  }, [profile, brokers, clients, registeredProperties, property, rooms, photos, samples]);
 
-  // Sync homogenized NBR 14.653 calculation with Express backend
   useEffect(() => {
     let active = true;
     const runCalculation = async () => {
@@ -179,6 +167,172 @@ export default function App() {
     samples,
   ]);
 
+  const handleSaveProfile = useCallback(
+    (updated: UserProfile) => {
+      const targetId = updated.id || profile.id || 'broker_1';
+      const normalized = { ...updated, id: targetId };
+      setProfile(normalized);
+      setBrokers((prev) => {
+        const exists = prev.some((b) => b.id === targetId);
+        return exists
+          ? prev.map((b) => (b.id === targetId ? normalized : b))
+          : [...prev, normalized];
+      });
+      notify('Cadastro do corretor atualizado.', 'success');
+    },
+    [profile.id, notify]
+  );
+
+  const handleAddBroker = useCallback(
+    (created: UserProfile) => {
+      setBrokers((prev) => [...prev, created]);
+      setProfile(created);
+      notify(`Corretor "${created.name}" cadastrado e definido como ativo.`, 'success');
+    },
+    [notify]
+  );
+
+  const handleSelectBroker = useCallback(
+    (broker: UserProfile) => {
+      setProfile(broker);
+      notify(`Corretor ativo alterado para "${broker.name}".`, 'info');
+    },
+    [notify]
+  );
+
+  const handleDeleteBroker = useCallback(
+    (brokerId: string) => {
+      if (brokers.length <= 1) {
+        notify('É necessário manter ao menos 1 corretor cadastrado.', 'warning');
+        return;
+      }
+      const nextList = brokers.filter((b) => b.id !== brokerId);
+      setBrokers(nextList);
+      if (profile.id === brokerId && nextList[0]) {
+        setProfile(nextList[0]);
+      }
+      notify('Corretor removido do cadastro.', 'info');
+    },
+    [brokers, profile.id, notify]
+  );
+
+  const handleSelectRegisteredProperty = useCallback(
+    (selectedProp: RegisteredProperty, owner?: ClientRecord) => {
+      setProperty((prev) => ({
+        ...prev,
+        clientName: owner?.name ?? prev.clientName,
+        clientDoc: owner?.document ?? prev.clientDoc,
+        purpose: selectedProp.purpose,
+        zip: selectedProp.zip,
+        street: selectedProp.street,
+        neighborhood: selectedProp.neighborhood,
+        cityState: selectedProp.cityState,
+        matricula: selectedProp.matricula,
+        cartorio: selectedProp.cartorio,
+        type: selectedProp.type,
+        standard: selectedProp.standard,
+        privateArea: selectedProp.privateArea,
+        totalArea: selectedProp.totalArea,
+        ageYears: selectedProp.ageYears,
+        usefulLifeYears: selectedProp.usefulLifeYears,
+        rossHeidecke: selectedProp.rossHeidecke,
+        summaryDescription: selectedProp.summaryDescription || prev.summaryDescription,
+      }));
+      setActiveTab('wizard');
+      notify(`Imóvel "${selectedProp.title}" carregado para avaliação.`, 'success');
+    },
+    [notify]
+  );
+
+  const handleSaveCurrentToRegistry = useCallback(() => {
+    const cleanDoc = property.clientDoc.trim();
+    const cleanName = property.clientName.trim();
+    if (!cleanName) {
+      notify('Informe o nome do solicitante antes de salvar na base.', 'warning');
+      return;
+    }
+
+    let existingClient = clients.find(
+      (c) =>
+        (cleanDoc && c.document === cleanDoc) ||
+        c.name.toLowerCase() === cleanName.toLowerCase()
+    );
+
+    if (!existingClient) {
+      existingClient = {
+        id: `cli_${Date.now()}`,
+        name: cleanName,
+        document: cleanDoc || 'Não informado',
+        personType: cleanDoc.includes('/') ? 'PJ' : 'PF',
+        email: '',
+        phone: '',
+        cityState: property.cityState,
+        notes: 'Cadastrado automaticamente a partir da avaliação PTAM.',
+        createdAt: new Date().toLocaleDateString('pt-BR'),
+      };
+      setClients((prev) => [existingClient!, ...prev]);
+    }
+
+    const existingProp = registeredProperties.find(
+      (p) =>
+        (property.matricula && p.matricula === property.matricula) ||
+        p.street.toLowerCase() === property.street.toLowerCase()
+    );
+
+    if (existingProp) {
+      setRegisteredProperties((prev) =>
+        prev.map((p) =>
+          p.id === existingProp.id
+            ? {
+                ...p,
+                clientId: existingClient!.id,
+                purpose: property.purpose,
+                zip: property.zip,
+                street: property.street,
+                neighborhood: property.neighborhood,
+                cityState: property.cityState,
+                matricula: property.matricula,
+                cartorio: property.cartorio,
+                type: property.type,
+                standard: property.standard,
+                privateArea: property.privateArea,
+                totalArea: property.totalArea,
+                ageYears: property.ageYears,
+                usefulLifeYears: property.usefulLifeYears,
+                rossHeidecke: property.rossHeidecke,
+                summaryDescription: property.summaryDescription,
+              }
+            : p
+        )
+      );
+      notify('Cliente e imóvel atualizados na base de cadastros.', 'success');
+    } else {
+      const newProp: RegisteredProperty = {
+        id: `prop_${Date.now()}`,
+        clientId: existingClient.id,
+        title: `${property.street.split('-')[0].trim()} · ${property.neighborhood}`,
+        purpose: property.purpose,
+        zip: property.zip,
+        street: property.street,
+        neighborhood: property.neighborhood,
+        cityState: property.cityState,
+        matricula: property.matricula,
+        cartorio: property.cartorio,
+        type: property.type,
+        standard: property.standard,
+        privateArea: property.privateArea,
+        totalArea: property.totalArea,
+        ageYears: property.ageYears,
+        usefulLifeYears: property.usefulLifeYears,
+        rossHeidecke: property.rossHeidecke,
+        summaryDescription: property.summaryDescription,
+        createdAt: new Date().toLocaleDateString('pt-BR'),
+      };
+      setRegisteredProperties((prev) => [newProp, ...prev]);
+      notify('Cliente e imóvel salvos na base de cadastros.', 'success');
+    }
+  }, [clients, property, registeredProperties, notify]);
+
   const initials = profile.name
     .split(' ')
     .filter(Boolean)
@@ -188,9 +342,9 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
-      {/* Top Navigation Bar (3-zone single-row contract) */}
+      {/* Top Navigation Bar */}
       <header className="bg-slate-900 border-b border-slate-800 px-6 py-3 sticky top-0 z-40 no-print">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-8">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-6">
           <button
             type="button"
             onClick={() => setActiveTab('dashboard')}
@@ -204,7 +358,7 @@ export default function App() {
 
           <nav
             aria-label="Navegação principal"
-            className="flex items-center gap-6 overflow-x-auto text-xs font-medium"
+            className="flex items-center gap-5 overflow-x-auto text-xs font-medium"
           >
             {NAV_TABS.map((tab) => {
               const isActive = activeTab === tab.id;
@@ -262,16 +416,31 @@ export default function App() {
             onNavigate={setActiveTab}
             property={property}
             stats={calculation?.stats ?? null}
+            clientCount={clients.length}
+            propertyCount={registeredProperties.length}
+          />
+        )}
+
+        {activeTab === 'registry' && (
+          <RegistryView
+            clients={clients}
+            onChangeClients={setClients}
+            properties={registeredProperties}
+            onChangeProperties={setRegisteredProperties}
+            activeMatricula={property.matricula}
+            onSelectPropertyForEvaluation={handleSelectRegisteredProperty}
+            onNotify={notify}
           />
         )}
 
         {activeTab === 'profile' && (
           <ProfileView
             profile={profile}
-            onSaveProfile={(updated) => {
-              setProfile(updated);
-              notify('Identidade profissional atualizada.', 'success');
-            }}
+            brokers={brokers}
+            onSaveProfile={handleSaveProfile}
+            onSelectBroker={handleSelectBroker}
+            onAddBroker={handleAddBroker}
+            onDeleteBroker={handleDeleteBroker}
           />
         )}
 
@@ -280,6 +449,10 @@ export default function App() {
             profile={profile}
             property={property}
             onChangeProperty={setProperty}
+            clients={clients}
+            registeredProperties={registeredProperties}
+            onSelectRegisteredProperty={handleSelectRegisteredProperty}
+            onSaveCurrentToRegistry={handleSaveCurrentToRegistry}
             rooms={rooms}
             onChangeRooms={setRooms}
             photos={photos}

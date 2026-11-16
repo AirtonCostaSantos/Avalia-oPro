@@ -20,6 +20,7 @@ import {
 import type {
   AppTab,
   CalculationResponse,
+  ClientRecord,
   ConstructionStandard,
   DefectSeverity,
   EvaluationPurpose,
@@ -28,6 +29,7 @@ import type {
   MarketSample,
   PropertyDetails,
   PropertyType,
+  RegisteredProperty,
   RoomCondition,
   RossState,
   UserProfile,
@@ -44,6 +46,10 @@ interface WizardViewProps {
   profile: UserProfile;
   property: PropertyDetails;
   onChangeProperty: (updated: PropertyDetails) => void;
+  clients: ClientRecord[];
+  registeredProperties: RegisteredProperty[];
+  onSelectRegisteredProperty: (prop: RegisteredProperty, client?: ClientRecord) => void;
+  onSaveCurrentToRegistry: () => void;
   rooms: InspectionRoom[];
   onChangeRooms: (updated: InspectionRoom[]) => void;
   photos: InspectionPhoto[];
@@ -68,6 +74,10 @@ export function WizardView({
   profile,
   property,
   onChangeProperty,
+  clients,
+  registeredProperties,
+  onSelectRegisteredProperty,
+  onSaveCurrentToRegistry,
   rooms,
   onChangeRooms,
   photos,
@@ -317,6 +327,76 @@ export function WizardView({
       {/* STEP 1: CARTÓRIO & DADOS GERAIS */}
       {step === 1 && (
         <div className="space-y-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3 text-xs">
+            <div className="flex flex-wrap items-center gap-3 flex-1">
+              <div className="min-w-[200px] flex-1">
+                <label className="block text-[11px] text-slate-400 mb-1">
+                  Importar Imóvel Cadastrado
+                </label>
+                <select
+                  value=""
+                  onChange={(e) => {
+                    const selected = registeredProperties.find((p) => p.id === e.target.value);
+                    if (!selected) return;
+                    const owner = clients.find((c) => c.id === selected.clientId);
+                    onSelectRegisteredProperty(selected, owner);
+                  }}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-amber-500"
+                >
+                  <option value="">Selecionar imóvel da base ({registeredProperties.length})...</option>
+                  {registeredProperties.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.title} · Mat. {p.matricula}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="min-w-[200px] flex-1">
+                <label className="block text-[11px] text-slate-400 mb-1">
+                  Vincular Cliente Cadastrado
+                </label>
+                <select
+                  value=""
+                  onChange={(e) => {
+                    const selected = clients.find((c) => c.id === e.target.value);
+                    if (!selected) return;
+                    onChangeProperty({
+                      ...property,
+                      clientName: selected.name,
+                      clientDoc: selected.document,
+                    });
+                    onNotify(`Cliente "${selected.name}" vinculado.`, 'success');
+                  }}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-amber-500"
+                >
+                  <option value="">Selecionar cliente da base ({clients.length})...</option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} · {c.document}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 lg:self-end">
+              <button
+                type="button"
+                onClick={onSaveCurrentToRegistry}
+                className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 font-semibold whitespace-nowrap cursor-pointer"
+              >
+                Salvar Atual no Cadastro
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigate('registry')}
+                className="px-3.5 py-2 rounded-lg border border-slate-800 text-slate-300 hover:text-white whitespace-nowrap cursor-pointer"
+              >
+                Gerenciar Base
+              </button>
+            </div>
+          </div>
+
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
             <h2 className="text-xs font-bold text-amber-400 flex items-center gap-2">
               <User className="w-4 h-4" /> Solicitante da Avaliação & Finalidade

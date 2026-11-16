@@ -1,4 +1,4 @@
-export type AppTab = 'dashboard' | 'profile' | 'wizard' | 'ptam-doc' | 'inspection-doc';
+export type AppTab = 'dashboard' | 'registry' | 'profile' | 'wizard' | 'ptam-doc' | 'inspection-doc';
 
 export type WizardStep = 1 | 2 | 3 | 4 | 5;
 
@@ -25,6 +25,7 @@ export type DefectSeverity = '' | 'LEVE' | 'MODERADO' | 'GRAVE';
 export type InspectionType = 'ENTRADA' | 'SAIDA';
 
 export interface UserProfile {
+  id?: string;
   name: string;
   creci: string;
   creciState: string;
@@ -132,4 +133,40 @@ export interface CalculationResponse {
   targetK: number;
   treatedSamples: TreatedSample[];
   stats: CalculationStats;
+}
+
+export type PersonType = 'PF' | 'PJ';
+
+export interface ClientRecord {
+  id: string;
+  name: string;
+  document: string;
+  personType: PersonType;
+  email: string;
+  phone: string;
+  cityState: string;
+  notes: string;
+  createdAt: string;
+}
+
+export interface RegisteredProperty {
+  id: string;
+  clientId: string;
+  title: string;
+  purpose: EvaluationPurpose;
+  zip: string;
+  street: string;
+  neighborhood: string;
+  cityState: string;
+  matricula: string;
+  cartorio: string;
+  type: PropertyType;
+  standard: ConstructionStandard;
+  privateArea: number;
+  totalArea: number;
+  ageYears: number;
+  usefulLifeYears: number;
+  rossHeidecke: RossState;
+  summaryDescription: string;
+  createdAt: string;
 }
