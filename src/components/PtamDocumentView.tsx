@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { Building2, Download, Printer } from 'lucide-react';
 import type { CalculationResponse, PropertyDetails, UserProfile } from '../types/valuation';
 import {
@@ -7,6 +8,7 @@ import {
   ROSS_STATE_LABELS,
   STANDARD_LABELS,
 } from '../utils/valuationMath';
+import { downloadDocumentHtml, printDocumentElement } from '../utils/printDocument';
 
 interface PtamDocumentViewProps {
   profile: UserProfile;
@@ -31,11 +33,13 @@ function QrVerificationSvg() {
 }
 
 export function PtamDocumentView({ profile, property, calculation }: PtamDocumentViewProps) {
+  const docRef = useRef<HTMLElement | null>(null);
   const kPercent = (
     calcRossHeideckeK(property.ageYears, property.usefulLifeYears, property.rossHeidecke) * 100
   ).toFixed(2);
   const stats = calculation?.stats;
   const samples = calculation?.treatedSamples ?? [];
+  const docTitle = `PTAM - ${property.street} (${property.matricula || 'Imovel'})`;
 
   return (
     <div className="space-y-4">
@@ -49,17 +53,35 @@ export function PtamDocumentView({ profile, property, calculation }: PtamDocumen
             Formatação formal homologada para impressão, laudos judiciais e garantias bancárias
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => window.print()}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-        >
-          <Download className="w-4 h-4" /> Imprimir / Exportar PTAM (PDF)
-        </button>
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() =>
+              downloadDocumentHtml(
+                docRef.current,
+                docTitle,
+                `PTAM-${property.matricula || 'avaliacao'}.html`
+              )
+            }
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            <Download className="w-4 h-4 text-amber-400" /> Baixar Documento
+          </button>
+          <button
+            type="button"
+            onClick={() => printDocumentElement(docRef.current, docTitle)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            <Printer className="w-4 h-4" /> Imprimir / Exportar PTAM (PDF)
+          </button>
+        </div>
       </div>
 
       {/* A4 Sheet */}
-      <article className="printable-doc bg-white text-slate-900 p-8 md:p-12 shadow-xl rounded font-serif text-justify text-xs leading-relaxed max-w-4xl mx-auto border border-slate-200">
+      <article
+        ref={docRef}
+        className="printable-doc bg-white text-slate-900 p-8 md:p-12 shadow-xl rounded font-serif text-justify text-xs leading-relaxed max-w-4xl mx-auto border border-slate-200"
+      >
         <header className="border-b-2 border-slate-900 pb-5 mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded border border-amber-600 flex items-center justify-center bg-amber-50 text-amber-800 overflow-hidden shrink-0">

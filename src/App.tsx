@@ -17,6 +17,7 @@ import type {
   RegisteredProperty,
   UserProfile,
 } from './types/valuation';
+import { calculateValuation } from './lib/valuationEngine';
 import {
   INITIAL_CLIENTS,
   INITIAL_PHOTOS,
@@ -124,35 +125,45 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
+    const targetPayload = {
+      ageYears: property.ageYears,
+      usefulLifeYears: property.usefulLifeYears,
+      rossHeidecke: property.rossHeidecke,
+      privateArea: property.privateArea,
+      standard: property.standard,
+      type: property.type,
+    };
+
     const runCalculation = async () => {
       setIsCalculating(true);
+      const localResult = calculateValuation(targetPayload, samples) as CalculationResponse;
+
       try {
         const response = await fetch('/api/calculate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            target: {
-              ageYears: property.ageYears,
-              usefulLifeYears: property.usefulLifeYears,
-              rossHeidecke: property.rossHeidecke,
-              privateArea: property.privateArea,
-              standard: property.standard,
-              type: property.type,
-            },
+            target: targetPayload,
             samples,
           }),
         });
-        if (!response.ok) return;
-        const data: CalculationResponse = await response.json();
-        if (active) setCalculation(data);
-      } catch (err) {
-        console.error('Failed to calculate valuation:', err);
+        const contentType = response.headers.get('content-type') || '';
+        if (response.ok && contentType.includes('application/json')) {
+          const data: CalculationResponse = await response.json();
+          if (active && data && Array.isArray(data.treatedSamples)) {
+            setCalculation(data);
+            return;
+          }
+        }
+        if (active) setCalculation(localResult);
+      } catch {
+        if (active) setCalculation(localResult);
       } finally {
         if (active) setIsCalculating(false);
       }
     };
 
-    const debounceId = setTimeout(runCalculation, 120);
+    const debounceId = setTimeout(runCalculation, 80);
     return () => {
       active = false;
       clearTimeout(debounceId);

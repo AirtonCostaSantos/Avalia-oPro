@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { AlertTriangle, Building2, Camera, Download } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { AlertTriangle, Building2, Camera, Download, Printer } from 'lucide-react';
 import type {
   InspectionPhoto,
   InspectionRoom,
@@ -8,6 +8,7 @@ import type {
   UserProfile,
 } from '../types/valuation';
 import { buildPhotoWatermark } from '../utils/valuationMath';
+import { downloadDocumentHtml, printDocumentElement } from '../utils/printDocument';
 
 interface InspectionDocumentViewProps {
   profile: UserProfile;
@@ -22,8 +23,10 @@ export function InspectionDocumentView({
   rooms,
   photos,
 }: InspectionDocumentViewProps) {
+  const docRef = useRef<HTMLElement | null>(null);
   const [inspectionType, setInspectionType] = useState<InspectionType>('ENTRADA');
   const [failedPhotos, setFailedPhotos] = useState<Record<string, boolean>>({});
+  const docTitle = `Laudo de Vistoria (${inspectionType}) - ${property.street}`;
 
   return (
     <div className="space-y-4">
@@ -37,7 +40,7 @@ export function InspectionDocumentView({
             Memorial descritivo minucioso com grelha de fotos georreferenciadas e carimbo indelével
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           <div className="flex rounded-lg bg-slate-950 p-1 border border-slate-800 text-xs font-semibold">
             <button
               type="button"
@@ -64,16 +67,32 @@ export function InspectionDocumentView({
           </div>
           <button
             type="button"
-            onClick={() => window.print()}
+            onClick={() =>
+              downloadDocumentHtml(
+                docRef.current,
+                docTitle,
+                `Vistoria-${inspectionType}-${property.matricula || 'imovel'}.html`
+              )
+            }
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            <Download className="w-4 h-4 text-amber-400" /> Baixar Documento
+          </button>
+          <button
+            type="button"
+            onClick={() => printDocumentElement(docRef.current, docTitle)}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
           >
-            <Download className="w-4 h-4" /> Imprimir Laudo de Vistoria (PDF)
+            <Printer className="w-4 h-4" /> Imprimir Laudo (PDF)
           </button>
         </div>
       </div>
 
       {/* A4 Sheet */}
-      <article className="printable-doc bg-white text-slate-900 p-8 md:p-12 shadow-xl rounded font-sans text-xs leading-relaxed max-w-4xl mx-auto border border-slate-200">
+      <article
+        ref={docRef}
+        className="printable-doc bg-white text-slate-900 p-8 md:p-12 shadow-xl rounded font-sans text-xs leading-relaxed max-w-4xl mx-auto border border-slate-200"
+      >
         <header className="border-b-2 border-slate-900 pb-5 mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded border border-amber-600 flex items-center justify-center bg-amber-50 text-amber-800 overflow-hidden shrink-0">
