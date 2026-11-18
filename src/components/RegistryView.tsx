@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   Building,
   CheckCircle2,
@@ -26,6 +26,7 @@ import {
   ROSS_STATE_LABELS,
   STANDARD_LABELS,
 } from '../utils/valuationMath';
+import { extractCepDigits, fetchCepAddress, formatCep } from '../utils/cepLookup';
 
 interface RegistryViewProps {
   clients: ClientRecord[];
@@ -91,6 +92,7 @@ export function RegistryView({
   const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null);
   const [propertyForm, setPropertyForm] = useState(EMPTY_PROPERTY_FORM);
   const [cepLoading, setCepLoading] = useState(false);
+  const lastLookedUpCepRef = useRef<string>('');
 
   const clientMap = useMemo(() => {
     const map = new Map<string, ClientRecord>();
@@ -226,31 +228,50 @@ export function RegistryView({
     setPropertyModalOpen(true);
   };
 
-  const handlePropertyCepLookup = async () => {
-    const cleanCep = propertyForm.zip.replace(/\D/g, '');
+  const handlePropertyCepLookup = async (cepOverride?: string, force = false) => {
+    const rawZip = cepOverride ?? propertyForm.zip;
+    const cleanCep = extractCepDigits(rawZip);
     if (cleanCep.length !== 8) {
-      onNotify('Informe um CEP válido com 8 dígitos.', 'warning');
+      if (force) {
+        onNotify('Informe um CEP válido com 8 dígitos.', 'warning');
+      }
       return;
     }
+
+    if (!force && lastLookedUpCepRef.current === cleanCep) {
+      return;
+    }
+
+    lastLookedUpCepRef.current = cleanCep;
     setCepLoading(true);
-    try {
-      const response = await fetch(`/api/cep/${cleanCep}`);
-      const data = await response.json();
-      if (!response.ok) {
-        onNotify(data.error || 'CEP não localizado.', 'warning');
-        return;
-      }
-      setPropertyForm((prev) => ({
-        ...prev,
-        street: data.logradouro || prev.street,
-        neighborhood: data.bairro || prev.neighborhood,
-        cityState: data.localidade && data.uf ? `${data.localidade} - ${data.uf}` : prev.cityState,
-      }));
-      onNotify('Endereço preenchido via ViaCEP.', 'success');
-    } catch {
-      onNotify('Erro de rede ao consultar CEP.', 'warning');
-    } finally {
-      setCepLoading(false);
+    const { data, error } = await fetchCepAddress(cleanCep);
+    setCepLoading(false);
+
+    if (error || !data) {
+      lastLookedUpCepRef.current = '';
+      onNotify(error || 'CEP não localizado.', 'warning');
+      return;
+    }
+
+    setPropertyForm((prev) => ({
+      ...prev,
+      zip: data.cep,
+      street: data.logradouro || prev.street,
+      neighborhood: data.bairro || prev.neighborhood,
+      cityState: data.localidade && data.uf ? `${data.localidade} - ${data.uf}` : prev.cityState,
+    }));
+    onNotify(`Endereço preenchido automaticamente (${data.cep}).`, 'success');
+  };
+
+  const handlePropertyZipChange = (rawValue: string) => {
+    const formatted = formatCep(rawValue);
+    const digits = extractCepDigits(formatted);
+    setPropertyForm((prev) => ({ ...prev, zip: formatted }));
+
+    if (digits.length < 8) {
+      lastLookedUpCepRef.current = '';
+    } else if (digits.length === 8 && lastLookedUpCepRef.current !== digits) {
+      void handlePropertyCepLookup(formatted, false);
     }
   };
 
@@ -745,16 +766,24 @@ export function RegistryView({
                 <div className="relative">
                   <input
                     type="text"
+                    inputMode="numeric"
+                    maxLength={9}
                     value={propertyForm.zip}
-                    onChange={(e) => setPropertyForm({ ...propertyForm, zip: e.target.value })}
-                    onBlur={handlePropertyCepLookup}
+                    onChange={(e) => handlePropertyZipChange(e.target.value)}
+                    onBlur={() => void handlePropertyCepLookup(propertyForm.zip, false)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        void handlePropertyCepLookup(propertyForm.zip, true);
+                      }
+                    }}
                     placeholder="04538-133"
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-3 pr-8 py-2 text-white font-mono focus:outline-none focus:border-amber-500"
                   />
                   <button
                     type="button"
                     aria-label="Buscar CEP"
-                    onClick={handlePropertyCepLookup}
+                    onClick={() => void handlePropertyCepLookup(propertyForm.zip, true)}
                     className="absolute right-2.5 top-2.5 text-slate-400 hover:text-amber-400 cursor-pointer"
                   >
                     <Search className="w-3.5 h-3.5" />

@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from 'react';
+import { useRef, useState, type ChangeEvent } from 'react';
 import {
   AlertTriangle,
   Camera,
@@ -40,7 +40,9 @@ import {
   calcRossHeideckeK,
   formatBRL,
   ROSS_STATE_LABELS,
+  STANDARD_LABELS,
 } from '../utils/valuationMath';
+import { extractCepDigits, fetchCepAddress, formatCep } from '../utils/cepLookup';
 
 interface WizardViewProps {
   profile: UserProfile;
@@ -104,14 +106,14 @@ export function WizardView({
     notes: '',
   });
 
-  // Add sample modal state
+  // Add sample modal state (string-backed numeric inputs for smooth editing)
   const [showSampleModal, setShowSampleModal] = useState(false);
   const [newSample, setNewSample] = useState({
     title: '',
-    price: 2500000,
-    privateArea: 160,
-    ageYears: 10,
-    distanceMeters: 300,
+    price: '',
+    privateArea: '',
+    ageYears: '10',
+    distanceMeters: '300',
     rossHeidecke: 'ENTRE_NOVO_REGULAR' as RossState,
     standard: 'ALTO' as ConstructionStandard,
     sourceType: 'OFERTA' as 'OFERTA' | 'TRANSACIONADO',
@@ -119,38 +121,57 @@ export function WizardView({
 
   const [failedPhotoIds, setFailedPhotoIds] = useState<Record<string, boolean>>({});
 
+  const lastLookedUpCepRef = useRef<string>(extractCepDigits(property.zip));
+
   const updateProp = <K extends keyof PropertyDetails>(key: K, value: PropertyDetails[K]) => {
     onChangeProperty({ ...property, [key]: value });
   };
 
-  const handleLookupCep = async () => {
-    const cleanCep = property.zip.replace(/\D/g, '');
+  const handleLookupCep = async (cepOverride?: string, force = false) => {
+    const rawZip = cepOverride ?? property.zip;
+    const cleanCep = extractCepDigits(rawZip);
     if (cleanCep.length !== 8) {
-      onNotify('Informe um CEP válido com 8 dígitos.', 'warning');
+      if (force) {
+        onNotify('Informe um CEP válido com 8 dígitos.', 'warning');
+      }
       return;
     }
 
-    setCepLoading(true);
-    try {
-      const response = await fetch(`/api/cep/${cleanCep}`);
-      const data = await response.json();
-      if (!response.ok) {
-        onNotify(data.error || 'Não foi possível localizar o CEP.', 'warning');
-        return;
-      }
+    if (!force && lastLookedUpCepRef.current === cleanCep) {
+      return;
+    }
 
-      onChangeProperty({
-        ...property,
-        street: data.logradouro || property.street,
-        neighborhood: data.bairro || property.neighborhood,
-        cityState:
-          data.localidade && data.uf ? `${data.localidade} - ${data.uf}` : property.cityState,
-      });
-      onNotify('Endereço atualizado via ViaCEP.', 'success');
-    } catch {
-      onNotify('Falha de rede ao consultar CEP.', 'warning');
-    } finally {
-      setCepLoading(false);
+    lastLookedUpCepRef.current = cleanCep;
+    setCepLoading(true);
+    const { data, error } = await fetchCepAddress(cleanCep);
+    setCepLoading(false);
+
+    if (error || !data) {
+      lastLookedUpCepRef.current = '';
+      onNotify(error || 'Não foi possível localizar o CEP.', 'warning');
+      return;
+    }
+
+    onChangeProperty({
+      ...property,
+      zip: data.cep,
+      street: data.logradouro || property.street,
+      neighborhood: data.bairro || property.neighborhood,
+      cityState:
+        data.localidade && data.uf ? `${data.localidade} - ${data.uf}` : property.cityState,
+    });
+    onNotify(`Endereço preenchido automaticamente (${data.cep}).`, 'success');
+  };
+
+  const handleZipChange = (rawValue: string) => {
+    const formatted = formatCep(rawValue);
+    const digits = extractCepDigits(formatted);
+    updateProp('zip', formatted);
+
+    if (digits.length < 8) {
+      lastLookedUpCepRef.current = '';
+    } else if (digits.length === 8 && lastLookedUpCepRef.current !== digits) {
+      void handleLookupCep(formatted, false);
     }
   };
 
@@ -251,13 +272,27 @@ export function WizardView({
   };
 
   const handleConfirmAddSample = () => {
+    const parsedPrice = Number(String(newSample.price).replace(',', '.'));
+    const parsedArea = Number(String(newSample.privateArea).replace(',', '.'));
+    const parsedAge = Number(String(newSample.ageYears).replace(',', '.'));
+    const parsedDist = Number(String(newSample.distanceMeters).replace(',', '.'));
+
+    if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) {
+      onNotify('Informe um preço válido maior que zero para a amostra.', 'warning');
+      return;
+    }
+    if (!Number.isFinite(parsedArea) || parsedArea <= 0) {
+      onNotify('Informe uma área privativa válida maior que zero.', 'warning');
+      return;
+    }
+
     const created: MarketSample = {
       id: Date.now(),
-      title: newSample.title.trim() || 'Amostra Comparável Adicional',
-      price: Number(newSample.price) || 2500000,
-      privateArea: Number(newSample.privateArea) || 160,
-      ageYears: Number(newSample.ageYears) || 10,
-      distanceMeters: Number(newSample.distanceMeters) || 300,
+      title: newSample.title.trim() || `Amostra Comparável #${samples.length + 1}`,
+      price: Math.round(parsedPrice),
+      privateArea: parsedArea,
+      ageYears: Number.isFinite(parsedAge) && parsedAge >= 0 ? parsedAge : 0,
+      distanceMeters: Number.isFinite(parsedDist) && parsedDist >= 0 ? parsedDist : 0,
       rossHeidecke: newSample.rossHeidecke,
       standard: newSample.standard,
       sourceType: newSample.sourceType,
@@ -266,15 +301,15 @@ export function WizardView({
     setShowSampleModal(false);
     setNewSample({
       title: '',
-      price: 2500000,
-      privateArea: 160,
-      ageYears: 10,
-      distanceMeters: 300,
+      price: '',
+      privateArea: '',
+      ageYears: '10',
+      distanceMeters: '300',
       rossHeidecke: 'ENTRE_NOVO_REGULAR',
-      standard: 'ALTO',
+      standard: property.standard,
       sourceType: 'OFERTA',
     });
-    onNotify('Amostra adicionada à homogeneização.', 'success');
+    onNotify('Amostra adicionada e homogeneização recalculada.', 'success');
   };
 
   const handleDeleteSample = (id: number) => {
@@ -454,15 +489,24 @@ export function WizardView({
                 <div className="relative">
                   <input
                     type="text"
+                    inputMode="numeric"
+                    maxLength={9}
+                    placeholder="00000-000"
                     value={property.zip}
-                    onChange={(e) => updateProp('zip', e.target.value)}
-                    onBlur={handleLookupCep}
+                    onChange={(e) => handleZipChange(e.target.value)}
+                    onBlur={() => void handleLookupCep(property.zip, false)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        void handleLookupCep(property.zip, true);
+                      }
+                    }}
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-3 pr-9 py-2 text-white font-mono focus:outline-none focus:border-amber-500"
                   />
                   <button
                     type="button"
                     aria-label="Consultar CEP"
-                    onClick={handleLookupCep}
+                    onClick={() => void handleLookupCep(property.zip, true)}
                     className="absolute right-2.5 top-2.5 text-slate-400 hover:text-amber-400 cursor-pointer"
                   >
                     <Search className="w-3.5 h-3.5" />
@@ -1228,9 +1272,18 @@ export function WizardView({
         <div
           role="dialog"
           aria-modal="true"
-          className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowSampleModal(false);
+          }}
+          className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4 overflow-y-auto"
         >
-          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-lg w-full p-5 shadow-2xl space-y-4">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleConfirmAddSample();
+            }}
+            className="bg-slate-900 border border-slate-800 rounded-xl max-w-lg w-full p-5 shadow-2xl space-y-4 my-auto"
+          >
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 <PlusCircle className="w-4 h-4 text-amber-500" />
@@ -1251,6 +1304,7 @@ export function WizardView({
                 <label className="block text-slate-400 mb-1">Identificação / Edifício</label>
                 <input
                   type="text"
+                  autoFocus
                   placeholder="Ex: Apto Ed. Lumière (R. Amauri)"
                   value={newSample.title}
                   onChange={(e) => setNewSample({ ...newSample, title: e.target.value })}
@@ -1258,22 +1312,28 @@ export function WizardView({
                 />
               </div>
               <div>
-                <label className="block text-slate-400 mb-1">Preço (R$)</label>
+                <label className="block text-slate-400 mb-1">Preço (R$) *</label>
                 <input
                   type="number"
+                  min={1}
+                  step="any"
+                  required
+                  placeholder="Ex: 2500000"
                   value={newSample.price}
-                  onChange={(e) => setNewSample({ ...newSample, price: Number(e.target.value) })}
+                  onChange={(e) => setNewSample({ ...newSample, price: e.target.value })}
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono tabular-nums focus:outline-none focus:border-amber-500"
                 />
               </div>
               <div>
-                <label className="block text-slate-400 mb-1">Área Privativa (m²)</label>
+                <label className="block text-slate-400 mb-1">Área Privativa (m²) *</label>
                 <input
                   type="number"
+                  min={1}
+                  step="any"
+                  required
+                  placeholder="Ex: 160"
                   value={newSample.privateArea}
-                  onChange={(e) =>
-                    setNewSample({ ...newSample, privateArea: Number(e.target.value) })
-                  }
+                  onChange={(e) => setNewSample({ ...newSample, privateArea: e.target.value })}
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono tabular-nums focus:outline-none focus:border-amber-500"
                 />
               </div>
@@ -1281,8 +1341,9 @@ export function WizardView({
                 <label className="block text-slate-400 mb-1">Idade Aparente (Anos)</label>
                 <input
                   type="number"
+                  min={0}
                   value={newSample.ageYears}
-                  onChange={(e) => setNewSample({ ...newSample, ageYears: Number(e.target.value) })}
+                  onChange={(e) => setNewSample({ ...newSample, ageYears: e.target.value })}
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono tabular-nums focus:outline-none focus:border-amber-500"
                 />
               </div>
@@ -1290,10 +1351,9 @@ export function WizardView({
                 <label className="block text-slate-400 mb-1">Distância (m)</label>
                 <input
                   type="number"
+                  min={0}
                   value={newSample.distanceMeters}
-                  onChange={(e) =>
-                    setNewSample({ ...newSample, distanceMeters: Number(e.target.value) })
-                  }
+                  onChange={(e) => setNewSample({ ...newSample, distanceMeters: e.target.value })}
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono tabular-nums focus:outline-none focus:border-amber-500"
                 />
               </div>
@@ -1306,10 +1366,11 @@ export function WizardView({
                   }
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-amber-500"
                 >
-                  <option value="NOVO">A - Novo</option>
-                  <option value="ENTRE_NOVO_REGULAR">B - Entre Novo/Regular</option>
-                  <option value="REGULAR">C - Regular</option>
-                  <option value="REPAROS_SIMPLES">E - Reparos Simples</option>
+                  {(Object.keys(ROSS_STATE_LABELS) as RossState[]).map((key) => (
+                    <option key={key} value={key}>
+                      {ROSS_STATE_LABELS[key]}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -1324,9 +1385,11 @@ export function WizardView({
                   }
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-amber-500"
                 >
-                  <option value="NORMAL_MEDIO">Normal Médio</option>
-                  <option value="ALTO">Alto Padrão</option>
-                  <option value="LUXO">Luxo</option>
+                  {(Object.keys(STANDARD_LABELS) as ConstructionStandard[]).map((key) => (
+                    <option key={key} value={key}>
+                      {STANDARD_LABELS[key]}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="col-span-2">
@@ -1347,6 +1410,15 @@ export function WizardView({
               </div>
             </div>
 
+            {Number(newSample.price) > 0 && Number(newSample.privateArea) > 0 && (
+              <div className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 flex items-center justify-between text-xs">
+                <span className="text-slate-400">Valor unitário bruto estimado:</span>
+                <span className="font-mono font-bold text-amber-400 tabular-nums">
+                  {formatBRL(Math.round(Number(newSample.price) / Number(newSample.privateArea)))} / m²
+                </span>
+              </div>
+            )}
+
             <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
               <button
                 type="button"
@@ -1356,14 +1428,13 @@ export function WizardView({
                 Cancelar
               </button>
               <button
-                type="button"
-                onClick={handleConfirmAddSample}
+                type="submit"
                 className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs cursor-pointer"
               >
                 Salvar Amostra
               </button>
             </div>
-          </div>
+          </form>
         </div>
       )}
     </div>

@@ -249,29 +249,61 @@ async function startServer() {
       return;
     }
 
-    try {
+    const fetchWithTimeout = async (url: string, timeoutMs = 5000) => {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-      const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`, {
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        return await fetch(url, { signal: controller.signal });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    };
 
-      if (!response.ok) {
-        res.status(502).json({ error: 'Serviço ViaCEP indisponível no momento.' });
+    try {
+      const viaCepRes = await fetchWithTimeout(`https://viacep.com.br/ws/${cleanCep}/json/`);
+      if (viaCepRes.ok) {
+        const data = await viaCepRes.json();
+        if (data?.erro) {
+          res.status(404).json({ error: 'CEP não encontrado na base dos Correios.' });
+          return;
+        }
+        res.json({
+          cep: data.cep || cleanCep,
+          logradouro: data.logradouro || '',
+          bairro: data.bairro || '',
+          localidade: data.localidade || '',
+          uf: data.uf || '',
+        });
         return;
       }
-
-      const data = await response.json();
-      if (data?.erro) {
-        res.status(404).json({ error: 'CEP não encontrado na base ViaCEP.' });
-        return;
-      }
-
-      res.json(data);
     } catch {
-      res.status(504).json({ error: 'Tempo limite excedido ao consultar CEP.' });
+      // Fall through to BrasilAPI
     }
+
+    try {
+      const brasilApiRes = await fetchWithTimeout(
+        `https://brasilapi.com.br/api/cep/v1/${cleanCep}`
+      );
+      if (brasilApiRes.ok) {
+        const data = await brasilApiRes.json();
+        res.json({
+          cep: data.cep || cleanCep,
+          logradouro: data.street || '',
+          bairro: data.neighborhood || '',
+          localidade: data.city || '',
+          uf: data.state || '',
+        });
+        return;
+      }
+      if (brasilApiRes.status === 404) {
+        res.status(404).json({ error: 'CEP não encontrado.' });
+        return;
+      }
+    } catch {
+      // Both providers failed
+    }
+
+    res.status(504).json({ error: 'Serviços de CEP indisponíveis no momento. Tente novamente.' });
   });
 
   if (!isProduction) {
