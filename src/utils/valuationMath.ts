@@ -11,6 +11,8 @@ import type {
   RossState,
   UserProfile,
 } from '../types/valuation';
+import livingRoomImg from '../assets/images/living_room_luxury_1794692666004.jpg';
+import gourmetBalconyImg from '../assets/images/gourmet_balcony_1794692666307.jpg';
 
 export const HEIDECKE_COEFFICIENTS: Record<RossState, number> = {
   NOVO: 0.0,
@@ -173,7 +175,7 @@ export const INITIAL_PHOTOS: InspectionPhoto[] = [
     id: 'p1',
     title: 'Living Principal & Sala de Jantar',
     room: 'Sala de Estar',
-    url: '/src/assets/images/living_room_luxury_1794692666004.jpg',
+    url: livingRoomImg,
     desc: 'Porcelanato polido 120x120 intacto, sem peças soltas ou trincas.',
     hasDefect: false,
     severity: '',
@@ -184,7 +186,7 @@ export const INITIAL_PHOTOS: InspectionPhoto[] = [
     id: 'p2',
     title: 'Bancada da Varanda Gourmet',
     room: 'Varanda Gourmet',
-    url: '/src/assets/images/gourmet_balcony_1794692666307.jpg',
+    url: gourmetBalconyImg,
     desc: 'Pequena fissura superficial no rejunte da bancada lateral esquerda.',
     hasDefect: true,
     severity: 'LEVE',
