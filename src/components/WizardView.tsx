@@ -6,6 +6,7 @@ import {
   Gauge,
   Layers,
   MapPin,
+  Pencil,
   Plus,
   PlusCircle,
   Ruler,
@@ -94,8 +95,9 @@ export function WizardView({
   const [step, setStep] = useState<WizardStep>(1);
   const [cepLoading, setCepLoading] = useState(false);
 
-  // Inline room creation form state (replaces window.prompt)
+  // Inline room creation/editing form state (replaces window.prompt)
   const [showAddRoom, setShowAddRoom] = useState(false);
+  const [editingRoomId, setEditingRoomId] = useState<number | null>(null);
   const [newRoom, setNewRoom] = useState<Omit<InspectionRoom, 'id'>>({
     name: '',
     floor: 'Porcelanato',
@@ -175,26 +177,7 @@ export function WizardView({
     }
   };
 
-  const handleAddRoom = () => {
-    const trimmed = newRoom.name.trim();
-    if (!trimmed) {
-      onNotify('Informe o nome do ambiente antes de salvar.', 'warning');
-      return;
-    }
-
-    onChangeRooms([
-      ...rooms,
-      {
-        id: Date.now(),
-        name: trimmed,
-        floor: newRoom.floor.trim() || 'Porcelanato',
-        ceiling: newRoom.ceiling.trim() || 'Gesso rebaixado',
-        wall: newRoom.wall.trim() || 'Pintura látex',
-        joinery: newRoom.joinery.trim() || 'Alumínio preto',
-        condition: newRoom.condition,
-        notes: newRoom.notes.trim() || 'Padrão conforme vistoria.',
-      },
-    ]);
+  const resetRoomForm = () => {
     setNewRoom({
       name: '',
       floor: 'Porcelanato',
@@ -204,12 +187,66 @@ export function WizardView({
       condition: 'BOM',
       notes: '',
     });
+    setEditingRoomId(null);
     setShowAddRoom(false);
+  };
+
+  const handleStartEditRoom = (room: InspectionRoom) => {
+    setEditingRoomId(room.id);
+    setNewRoom({
+      name: room.name,
+      floor: room.floor,
+      ceiling: room.ceiling,
+      wall: room.wall,
+      joinery: room.joinery,
+      condition: room.condition,
+      notes: room.notes,
+    });
+    setShowAddRoom(true);
+  };
+
+  const handleSaveRoom = () => {
+    const trimmed = newRoom.name.trim();
+    if (!trimmed) {
+      onNotify('Informe o nome do ambiente antes de salvar.', 'warning');
+      return;
+    }
+
+    const normalized: Omit<InspectionRoom, 'id'> = {
+      name: trimmed,
+      floor: newRoom.floor.trim() || 'Porcelanato',
+      ceiling: newRoom.ceiling.trim() || 'Gesso rebaixado',
+      wall: newRoom.wall.trim() || 'Pintura látex',
+      joinery: newRoom.joinery.trim() || 'Alumínio preto',
+      condition: newRoom.condition,
+      notes: newRoom.notes.trim() || 'Padrão conforme vistoria.',
+    };
+
+    if (editingRoomId !== null) {
+      onChangeRooms(
+        rooms.map((r) => (r.id === editingRoomId ? { ...normalized, id: editingRoomId } : r))
+      );
+      resetRoomForm();
+      onNotify('Ambiente atualizado no memorial.', 'success');
+      return;
+    }
+
+    onChangeRooms([
+      ...rooms,
+      {
+        id: Date.now(),
+        ...normalized,
+      },
+    ]);
+    resetRoomForm();
     onNotify('Ambiente adicionado ao memorial.', 'success');
   };
 
   const handleDeleteRoom = (id: number) => {
     onChangeRooms(rooms.filter((r) => r.id !== id));
+    if (editingRoomId === id) {
+      resetRoomForm();
+    }
   };
 
   const handlePhotoUpload = (event: ChangeEvent<HTMLInputElement>) => {
@@ -767,7 +804,14 @@ export function WizardView({
               </div>
               <button
                 type="button"
-                onClick={() => setShowAddRoom((prev) => !prev)}
+                onClick={() => {
+                  if (showAddRoom) {
+                    resetRoomForm();
+                  } else {
+                    setEditingRoomId(null);
+                    setShowAddRoom(true);
+                  }
+                }}
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -777,7 +821,9 @@ export function WizardView({
 
             {showAddRoom && (
               <div className="bg-slate-950 border border-amber-500/40 rounded-lg p-4 space-y-3 text-xs">
-                <div className="font-bold text-amber-400">Novo Cômodo / Ambiente</div>
+                <div className="font-bold text-amber-400">
+                  {editingRoomId !== null ? 'Editar Cômodo / Ambiente' : 'Novo Cômodo / Ambiente'}
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-slate-400 mb-1">Nome do Ambiente</label>
@@ -854,17 +900,17 @@ export function WizardView({
                 <div className="flex justify-end gap-2 pt-2">
                   <button
                     type="button"
-                    onClick={() => setShowAddRoom(false)}
+                    onClick={resetRoomForm}
                     className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 font-semibold cursor-pointer"
                   >
                     Cancelar
                   </button>
                   <button
                     type="button"
-                    onClick={handleAddRoom}
+                    onClick={handleSaveRoom}
                     className="px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold cursor-pointer"
                   >
-                    Salvar Ambiente
+                    {editingRoomId !== null ? 'Atualizar Ambiente' : 'Salvar Ambiente'}
                   </button>
                 </div>
               </div>
@@ -879,7 +925,11 @@ export function WizardView({
                 {rooms.map((room, idx) => (
                   <div
                     key={room.id}
-                    className="bg-slate-950 border border-slate-800 rounded-lg p-4 space-y-2 text-xs"
+                    className={`bg-slate-950 border rounded-lg p-4 space-y-2 text-xs transition-colors ${
+                      editingRoomId === room.id
+                        ? 'border-amber-500/70'
+                        : 'border-slate-800'
+                    }`}
                   >
                     <div className="flex items-center justify-between gap-4">
                       <div className="font-bold text-white flex items-center gap-2">
@@ -902,7 +952,17 @@ export function WizardView({
                         </span>
                         <button
                           type="button"
+                          aria-label={`Editar ${room.name}`}
+                          title="Editar ambiente"
+                          onClick={() => handleStartEditRoom(room)}
+                          className="text-slate-400 hover:text-amber-400 transition-colors cursor-pointer"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
                           aria-label={`Remover ${room.name}`}
+                          title="Remover ambiente"
                           onClick={() => handleDeleteRoom(room.id)}
                           className="text-slate-500 hover:text-red-400 transition-colors cursor-pointer"
                         >
